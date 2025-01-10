@@ -3,27 +3,37 @@
 #     cargo install --force cargo-make
 ############
 
-[config]
-# make tasks run at the workspace root
-default_to_workspace = false
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 
-[tasks.ci]
-dependencies = ["build", "test"]
-
-[tasks.build]
+[tasks.check-stable]
+workspace = false
 clear = true
-dependencies = ["build-all"]
+dependencies = [
+	{ name = "check", path = "examples/counter_without_macros" },
+	{ name = "check", path = "examples/counters_stable" },
+]
 
-[tasks.build-all]
+[tasks.ci-examples]
+workspace = false
+cwd = "examples"
 command = "cargo"
-args = ["+nightly", "build-all-features"]
-install_crate = "cargo-all-features"
+args = ["make", "ci-clean"]
 
-[tasks.test]
-clear = true
-dependencies = ["test-all"]
-
-[tasks.test-all]
+[tasks.check-examples]
+workspace = false
+cwd = "examples"
 command = "cargo"
-args = ["+nightly", "test-all-features"]
-install_crate = "cargo-all-features"
+args = ["make", "check-clean"]
+
+[tasks.build-examples]
+workspace = false
+cwd = "examples"
+command = "cargo"
+args = ["make", "build-clean"]
+
+[tasks.clean-examples]
+workspace = false
+cwd = "examples"
+command = "cargo"
+args = ["make", "clean"]
