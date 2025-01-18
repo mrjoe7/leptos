@@ -1,41 +1,73 @@
-use cfg_if::cfg_if;
-use leptos::*;
+// server-only stuff
+#[cfg(feature = "ssr")]
+mod ssr_imports {
+    pub use actix_files::Files;
+    pub use actix_web::*;
+    pub use hackernews::App;
 
-// boilerplate to run in different modes
-cfg_if! {
-    // server-only stuff
-    if #[cfg(feature = "ssr")] {
-        use actix_files::{Files};
-        use actix_web::*;
-        use leptos_hackernews::*;
-        use std::{net::SocketAddr, env};
-
-        #[get("/style.css")]
-        async fn css() -> impl Responder {
-            actix_files::NamedFile::open_async("./style.css").await
-        }
-
-        #[actix_web::main]
-        async fn main() -> std::io::Result<()> {
-            let addr = SocketAddr::from(([127,0,0,1],3000));
-
-            HttpServer::new(move || {
-                let render_options: RenderOptions = RenderOptions::builder().pkg_path("/pkg/leptos_hackernews").reload_port(3001).socket_address(addr.clone()).environment(&env::var("RUST_ENV")).build();
-                render_options.write_to_file();
-                App::new()
-                    .service(Files::new("/pkg", "./pkg"))
-                    .service(css)
-                    .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
-                    .route("/{tail:.*}", leptos_actix::render_app_to_stream(render_options, |cx| view! { cx, <App/> }))
-                //.wrap(middleware::Compress::default())
-            })
-            .bind(&addr)?
-            .run()
-            .await
-        }
-    } else {
-        fn main() {
-            // no client-side main function
-        }
+    #[get("/style.css")]
+    pub async fn css() -> impl Responder {
+        actix_files::NamedFile::open_async("./style.css").await
     }
+    #[get("/favicon.ico")]
+    pub async fn favicon() -> impl Responder {
+        actix_files::NamedFile::open_async("./target/site//favicon.ico").await
+    }
+}
+
+#[cfg(feature = "ssr")]
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    use leptos::prelude::*;
+    use leptos_actix::{generate_route_list, LeptosRoutes};
+    use leptos_meta::MetaTags;
+    use ssr_imports::*;
+
+    let conf = get_configuration(None).unwrap();
+    let addr = conf.leptos_options.site_addr;
+
+    HttpServer::new(move || {
+        // Generate the list of routes in your Leptos App
+        let routes = generate_route_list(App);
+        let leptos_options = &conf.leptos_options;
+        let site_root = &leptos_options.site_root;
+
+        App::new()
+            .service(css)
+            .service(favicon)
+            .leptos_routes(routes, {
+                let leptos_options = leptos_options.clone();
+                move || {
+                    use leptos::prelude::*;
+
+                    view! {
+                        <!DOCTYPE html>
+                        <html lang="en">
+                            <head>
+                                <meta charset="utf-8"/>
+                                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                                <AutoReload options=leptos_options.clone() />
+                                <HydrationScripts options=leptos_options.clone()/>
+                                <MetaTags/>
+                            </head>
+                            <body>
+                                <App/>
+                            </body>
+                        </html>
+                    }
+            }})
+            .service(Files::new("/", site_root.as_ref()))
+        //.wrap(middleware::Compress::default())
+    })
+    .bind(&addr)?
+    .run()
+    .await
+}
+
+// CSR-only setup
+#[cfg(not(feature = "ssr"))]
+fn main() {
+    use hackernews::App;
+    console_error_panic_hook::set_once();
+    leptos::mount::mount_to_body(App)
 }

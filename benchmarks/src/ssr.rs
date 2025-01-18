@@ -3,14 +3,13 @@ use test::Bencher;
 #[bench]
 fn leptos_ssr_bench(b: &mut Bencher) {
 	use leptos::*;
-
-	b.iter(|| {
-		_ = create_scope(create_runtime(), |cx| {
+	let r = create_runtime();
+    b.iter(|| {
+			leptos::leptos_dom::HydrationCtx::reset_id();
 			#[component]
-			fn Counter(cx: Scope, initial: i32) -> Element {
-				let (value, set_value) = create_signal(cx, initial);
+			fn Counter(initial: i32) -> impl IntoView {
+				let (value, set_value) = create_signal(initial);
 				view! {
-					cx,
 					<div>
 						<button on:click=move |_| set_value.update(|value| *value -= 1)>"-1"</button>
 						<span>"Value: " {move || value().to_string()} "!"</span>
@@ -19,8 +18,7 @@ fn leptos_ssr_bench(b: &mut Bencher) {
 				}
 			}
 
-			let rendered = view! { 
-				cx,
+			let rendered = view! {
 				<main>
 					<h1>"Welcome to our benchmark page."</h1>
 					<p>"Here's some introductory text."</p>
@@ -28,22 +26,61 @@ fn leptos_ssr_bench(b: &mut Bencher) {
 					<Counter initial=2/>
 					<Counter initial=3/>
 				</main>
-			};
+			}.into_view().render_to_string();
 
 			assert_eq!(
 				rendered,
-				"<main data-hk=\"0-0\"><h1>Welcome to our benchmark page.</h1><p>Here's some introductory text.</p><!--#--><div data-hk=\"0-2-0\"><button>-1</button><span>Value: <!--#-->1<!--/-->!</span><button>+1</button></div><!--/--><!--#--><div data-hk=\"0-3-0\"><button>-1</button><span>Value: <!--#-->2<!--/-->!</span><button>+1</button></div><!--/--><!--#--><div data-hk=\"0-4-0\"><button>-1</button><span>Value: <!--#-->3<!--/-->!</span><button>+1</button></div><!--/--></main>"
-			);
-		});
+"<main data-hk=\"0-0-0-1\"><h1 data-hk=\"0-0-0-2\">Welcome to our benchmark page.</h1><p data-hk=\"0-0-0-3\">Here&#x27;s some introductory text.</p><div data-hk=\"0-0-0-5\"><button data-hk=\"0-0-0-6\">-1</button><span data-hk=\"0-0-0-7\">Value: <!>1<!--hk=0-0-0-8-->!</span><button data-hk=\"0-0-0-9\">+1</button></div><!--hk=0-0-0-4--><div data-hk=\"0-0-0-11\"><button data-hk=\"0-0-0-12\">-1</button><span data-hk=\"0-0-0-13\">Value: <!>2<!--hk=0-0-0-14-->!</span><button data-hk=\"0-0-0-15\">+1</button></div><!--hk=0-0-0-10--><div data-hk=\"0-0-0-17\"><button data-hk=\"0-0-0-18\">-1</button><span data-hk=\"0-0-0-19\">Value: <!>3<!--hk=0-0-0-20-->!</span><button data-hk=\"0-0-0-21\">+1</button></div><!--hk=0-0-0-16--></main>"			);
 	});
+	r.dispose();
+}
+
+#[bench]
+fn tachys_ssr_bench(b: &mut Bencher) {
+	use leptos::{create_runtime, create_signal, SignalGet, SignalUpdate};
+	use tachy_maccy::view;
+	use tachydom::view::{Render, RenderHtml};
+	use tachydom::html::element::ElementChild;
+	use tachydom::html::attribute::global::ClassAttribute;
+	use tachydom::html::attribute::global::GlobalAttributes;
+	use tachydom::html::attribute::global::OnAttribute;
+	use tachydom::renderer::dom::Dom;
+	let rt = create_runtime();
+    b.iter(|| {
+		fn counter(initial: i32) -> impl Render<Dom> + RenderHtml<Dom> {
+			let (value, set_value) = create_signal(initial);
+			view! {
+				<div>
+					<button on:click=move |_| set_value.update(|value| *value -= 1)>"-1"</button>
+					<span>"Value: " {move || value().to_string()} "!"</span>
+					<button on:click=move |_| set_value.update(|value| *value += 1)>"+1"</button>
+				</div>
+			}
+		}
+
+		let rendered = view! {
+			<main>
+				<h1>"Welcome to our benchmark page."</h1>
+				<p>"Here's some introductory text."</p>
+				{counter(1)}
+				{counter(2)}
+				{counter(3)}
+			</main>
+		}.to_html();
+		assert_eq!(
+			rendered,
+			"<main><h1>Welcome to our benchmark page.</h1><p>Here's some introductory text.</p><div><button>-1</button><span>Value: <!>1<!>!</span><button>+1</button></div><div><button>-1</button><span>Value: <!>2<!>!</span><button>+1</button></div><div><button>-1</button><span>Value: <!>3<!>!</span><button>+1</button></div></main>"
+		);
+	});
+	rt.dispose();
 }
 
 #[bench]
 fn tera_ssr_bench(b: &mut Bencher) {
-	use tera::*;
-	use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
+    use tera::*;
 
-	static TEMPLATE: &str = r#"<main>
+    static TEMPLATE: &str = r#"<main>
 	<h1>Welcome to our benchmark page.</h1>
 	<p>Here's some introductory text.</p>
 	{% for counter in counters %}
@@ -55,37 +92,40 @@ fn tera_ssr_bench(b: &mut Bencher) {
 	{% endfor %}
 	</main>"#;
 
-	lazy_static::lazy_static! { 
-		static ref TERA: Tera = {
-			let mut tera = Tera::default();
-			tera.add_raw_templates(vec![("template.html", TEMPLATE)]).unwrap();
-			tera
-		};
-	}
 
-	#[derive(Serialize, Deserialize)]
-	struct Counter {
-		value: i32
-	}
+    static  LazyCell<TERA>: Tera = LazyLock::new(|| {
+        let mut tera = Tera::default();
+        tera.add_raw_templates(vec![("template.html", TEMPLATE)]).unwrap();
+        tera
+    });
 
-	b.iter(|| {
-		let mut ctx = Context::new();
-		ctx.insert("counters", &vec![
-			Counter { value: 0 },
-			Counter { value: 1},
-			Counter { value: 2 }
-		]);
 
-		let _ = TERA.render("template.html", &ctx).unwrap();
-	});
+    #[derive(Serialize, Deserialize)]
+    struct Counter {
+        value: i32,
+    }
+
+    b.iter(|| {
+        let mut ctx = Context::new();
+        ctx.insert(
+            "counters",
+            &vec![
+                Counter { value: 0 },
+                Counter { value: 1 },
+                Counter { value: 2 },
+            ],
+        );
+
+        let _ = TERA.render("template.html", &ctx).unwrap();
+    });
 }
 
 #[bench]
 fn sycamore_ssr_bench(b: &mut Bencher) {
-	use sycamore::*;
-	use sycamore::prelude::*;
+    use sycamore::prelude::*;
+    use sycamore::*;
 
-	b.iter(|| {
+    b.iter(|| {
 		_ = create_scope(|cx| {
 			#[derive(Prop)]
 			struct CounterProps {
@@ -139,10 +179,10 @@ fn sycamore_ssr_bench(b: &mut Bencher) {
 
 #[bench]
 fn yew_ssr_bench(b: &mut Bencher) {
-	use yew::prelude::*;
-	use yew::ServerRenderer;
+    use yew::prelude::*;
+    use yew::ServerRenderer;
 
-	b.iter(|| {
+    b.iter(|| {
 		#[derive(Properties, PartialEq, Eq, Debug)]
 		struct CounterProps {
 			initial: i32
