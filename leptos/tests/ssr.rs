@@ -1,83 +1,137 @@
-#[cfg(not(any(feature = "csr", feature = "hydrate")))]
+#[cfg(feature = "ssr")]
+use leptos::html::HtmlElement;
+
+#[cfg(feature = "ssr")]
 #[test]
 fn simple_ssr_test() {
-    use leptos_dom::*;
-    use leptos_macro::view;
-    use leptos_reactive::{create_runtime, create_scope, create_signal};
+    use leptos::prelude::*;
 
-    _ = create_scope(create_runtime(), |cx| {
-        let (value, set_value) = create_signal(cx, 0);
-        let rendered = view! {
-            cx,
-            <div>
-                <button on:click=move |_| set_value.update(|value| *value -= 1)>"-1"</button>
-                <span>"Value: " {move || value().to_string()} "!"</span>
-                <button on:click=move |_| set_value.update(|value| *value += 1)>"+1"</button>
-            </div>
-        };
+    let (value, set_value) = signal(0);
+    let rendered: View<HtmlElement<_, _, _>> = view! {
+        <div>
+            <button on:click=move |_| set_value.update(|value| *value -= 1)>"-1"</button>
+            <span>"Value: " {move || value.get().to_string()} "!"</span>
+            <button on:click=move |_| set_value.update(|value| *value += 1)>"+1"</button>
+        </div>
+    };
 
-        assert_eq!(
-            rendered,
-            r#"<div data-hk="0-0"><button>-1</button><span>Value: <!--#-->0<!--/-->!</span><button>+1</button></div>"# //r#"<div data-hk="0" id="hydrated" data-hk="0"><button>-1</button><span>Value: <!--#-->0<!--/-->!</span><button>+1</button></div>"#
-        );
-    });
+    assert_eq!(
+        rendered.to_html(),
+        "<div><button>-1</button><span>Value: \
+         <!>0<!>!</span><button>+1</button></div>"
+    );
 }
 
-#[cfg(not(any(feature = "csr", feature = "hydrate")))]
+#[cfg(feature = "ssr")]
 #[test]
 fn ssr_test_with_components() {
-    use leptos_core as leptos;
-    use leptos_core::Prop;
-    use leptos_dom::*;
-    use leptos_macro::*;
-    use leptos_reactive::{create_runtime, create_scope, create_signal, Scope};
+    use leptos::prelude::*;
 
     #[component]
-    fn Counter(cx: Scope, initial_value: i32) -> Element {
-        let (value, set_value) = create_signal(cx, initial_value);
+    fn Counter(initial_value: i32) -> impl IntoView {
+        let (value, set_value) = signal(initial_value);
         view! {
-            cx,
             <div>
                 <button on:click=move |_| set_value.update(|value| *value -= 1)>"-1"</button>
-                <span>"Value: " {move || value().to_string()} "!"</span>
+                <span>"Value: " {move || value.get().to_string()} "!"</span>
                 <button on:click=move |_| set_value.update(|value| *value += 1)>"+1"</button>
             </div>
         }
     }
 
-    _ = create_scope(create_runtime(), |cx| {
-        let rendered = view! {
-            cx,
-            <div class="counters">
-                <Counter initial_value=1/>
-                <Counter initial_value=2/>
-            </div>
-        };
+    let rendered: View<HtmlElement<_, _, _>> = view! {
+        <div class="counters">
+            <Counter initial_value=1/>
+            <Counter initial_value=2/>
+        </div>
+    };
 
-        assert_eq!(
-            rendered,
-            "<div data-hk=\"0-0\" class=\"counters\"><!--#--><div data-hk=\"0-2-0\"><button>-1</button><span>Value: <!--#-->1<!--/-->!</span><button>+1</button></div><!--/--><!--#--><div data-hk=\"0-3-0\"><button>-1</button><span>Value: <!--#-->2<!--/-->!</span><button>+1</button></div><!--/--></div>"
-        );
-    });
+    assert_eq!(
+        rendered.to_html(),
+        "<div class=\"counters\"><div><button>-1</button><span>Value: \
+         <!>1<!>!</span><button>+1</button></div><div><button>-1</\
+         button><span>Value: <!>2<!>!</span><button>+1</button></div></div>"
+    );
 }
 
-#[cfg(not(any(feature = "csr", feature = "hydrate")))]
+#[cfg(feature = "ssr")]
+#[test]
+fn ssr_test_with_snake_case_components() {
+    use leptos::prelude::*;
+
+    #[component]
+    fn snake_case_counter(initial_value: i32) -> impl IntoView {
+        let (value, set_value) = signal(initial_value);
+        view! {
+            <div>
+                <button on:click=move |_| set_value.update(|value| *value -= 1)>"-1"</button>
+                <span>"Value: " {move || value.get().to_string()} "!"</span>
+                <button on:click=move |_| set_value.update(|value| *value += 1)>"+1"</button>
+            </div>
+        }
+    }
+    let rendered: View<HtmlElement<_, _, _>> = view! {
+        <div class="counters">
+            <SnakeCaseCounter initial_value=1/>
+            <SnakeCaseCounter initial_value=2/>
+        </div>
+    };
+
+    assert_eq!(
+        rendered.to_html(),
+        "<div class=\"counters\"><div><button>-1</button><span>Value: \
+         <!>1<!>!</span><button>+1</button></div><div><button>-1</\
+         button><span>Value: <!>2<!>!</span><button>+1</button></div></div>"
+    );
+}
+
+#[cfg(feature = "ssr")]
 #[test]
 fn test_classes() {
-    use leptos_dom::*;
-    use leptos_macro::view;
-    use leptos_reactive::{create_runtime, create_scope, create_signal};
+    use leptos::prelude::*;
 
-    _ = create_scope(create_runtime(), |cx| {
-        let (value, set_value) = create_signal(cx, 5);
-        let rendered = view! {
-            cx,
-            <div class="my big" class:a={move || value() > 10} class:red=true class:car={move || value() > 1}></div>
-        };
+    let (value, _set_value) = signal(5);
+    let rendered: View<HtmlElement<_, _, _>> = view! {
+        <div
+            class="my big"
+            class:a=move || { value.get() > 10 }
+            class:red=true
+            class:car=move || { value.get() > 1 }
+        ></div>
+    };
 
-        assert_eq!(
-            rendered,
-            r#"<div data-hk="0-0" class="my big  red car"></div>"#
-        );
-    });
+    assert_eq!(rendered.to_html(), "<div class=\"my big  red car\"></div>");
+}
+
+#[cfg(feature = "ssr")]
+#[test]
+fn ssr_with_styles() {
+    use leptos::prelude::*;
+
+    let (_, set_value) = signal(0);
+    let styles = "myclass";
+    let rendered: View<HtmlElement<_, _, _>> = view! { class=styles,
+        <div>
+            <button class="btn" on:click=move |_| set_value.update(|value| *value -= 1)>
+                "-1"
+            </button>
+        </div>
+    };
+
+    assert_eq!(
+        rendered.to_html(),
+        "<div class=\"myclass\"><button class=\"btn \
+         myclass\">-1</button></div>"
+    );
+}
+
+#[cfg(feature = "ssr")]
+#[test]
+fn ssr_option() {
+    use leptos::prelude::*;
+
+    let (_, _) = signal(0);
+    let rendered: View<HtmlElement<_, _, _>> = view! { <option></option> };
+
+    assert_eq!(rendered.to_html(), "<option></option>");
 }

@@ -1,9 +1,8 @@
-use leptos::*;
-use leptos::{For, ForProps};
+use leptos::prelude::*;
 
 const MANY_COUNTERS: usize = 1000;
 
-type CounterHolder = Vec<(usize, (ReadSignal<i32>, WriteSignal<i32>))>;
+type CounterHolder = Vec<(usize, ArcRwSignal<i32>)>;
 
 #[derive(Copy, Clone)]
 struct CounterUpdater {
@@ -11,22 +10,22 @@ struct CounterUpdater {
 }
 
 #[component]
-pub fn Counters(cx: Scope) -> web_sys::Element {
-    let (next_counter_id, set_next_counter_id) = create_signal(cx, 0);
-    let (counters, set_counters) = create_signal::<CounterHolder>(cx, vec![]);
-    provide_context(cx, CounterUpdater { set_counters });
+pub fn Counters() -> impl IntoView {
+    let (next_counter_id, set_next_counter_id) = signal(0);
+    let (counters, set_counters) = signal::<CounterHolder>(vec![]);
+    provide_context(CounterUpdater { set_counters });
 
     let add_counter = move |_| {
-        let id = next_counter_id();
-        let sig = create_signal(cx, 0);
+        let id = next_counter_id.get();
+        let sig = ArcRwSignal::new(0);
         set_counters.update(move |counters| counters.push((id, sig)));
         set_next_counter_id.update(|id| *id += 1);
     };
 
     let add_many_counters = move |_| {
-        let next_id = next_counter_id();
+        let next_id = next_counter_id.get();
         let new_counters = (next_id..next_id + MANY_COUNTERS).map(|id| {
-            let signal = create_signal(cx, 0);
+            let signal = ArcRwSignal::new(0);
             (id, signal)
         });
 
@@ -38,69 +37,58 @@ pub fn Counters(cx: Scope) -> web_sys::Element {
         set_counters.update(|counters| counters.clear());
     };
 
-    view! { cx,
+    view! {
         <div>
-            <button on:click=add_counter>
-                "Add Counter"
-            </button>
-            <button on:click=add_many_counters>
-                {format!("Add {MANY_COUNTERS} Counters")}
-            </button>
-            <button on:click=clear_counters>
-                "Clear Counters"
-            </button>
+            <button on:click=add_counter>"Add Counter"</button>
+            <button on:click=add_many_counters>{format!("Add {MANY_COUNTERS} Counters")}</button>
+            <button on:click=clear_counters>"Clear Counters"</button>
             <p>
                 "Total: "
-                <span>{move ||
-                    counters.get()
-                        .iter()
-                        .map(|(_, (count, _))| count())
-                        .sum::<i32>()
-                        .to_string()
-                }</span>
-                " from "
-                <span>{move || counters().len().to_string()}</span>
+                <span data-testid="total">
+                    {move || {
+                        counters.get().iter().map(|(_, count)| count.get()).sum::<i32>().to_string()
+                    }}
+
+                </span> " from "
+                <span data-testid="counters">{move || counters.get().len().to_string()}</span>
                 " counters."
             </p>
             <ul>
-                <For each=counters key=|counter| counter.0>{
-                    |cx, (id, (value, set_value)): &(usize, (ReadSignal<i32>, WriteSignal<i32>))| {
-                        view! {
-                            cx,
-                            <Counter id=*id value=*value set_value=*set_value/>
-                        }
+                <For
+                    each=move || counters.get()
+                    key=|counter| counter.0
+                    children=move |(id, value)| {
+                        view! { <Counter id value/> }
                     }
-                }</For>
+                />
+
             </ul>
         </div>
     }
 }
 
 #[component]
-fn Counter(
-    cx: Scope,
-    id: usize,
-    value: ReadSignal<i32>,
-    set_value: WriteSignal<i32>,
-) -> web_sys::Element {
-    let CounterUpdater { set_counters } = use_context(cx).unwrap_throw();
+fn Counter(id: usize, value: ArcRwSignal<i32>) -> impl IntoView {
+    let value = RwSignal::from(value);
+    let CounterUpdater { set_counters } = use_context().unwrap();
 
-    let input = move |ev| set_value(event_target_value(&ev).parse::<i32>().unwrap_or_default());
-
-    // just an example of how a cleanup function works
-    // this will run when the scope is disposed, i.e., when this row is deleted
-    on_cleanup(cx, || log::debug!("deleted a row"));
-
-    view! { cx,
+    view! {
         <li>
-            <button on:click=move |_| set_value.update(move |value| *value -= 1)>"-1"</button>
-            <input type="text"
-                prop:value={move || value().to_string()}
-                on:input=input
+            <button on:click=move |_| value.update(move |value| *value -= 1)>"-1"</button>
+            <input
+                type="text"
+                prop:value=value
+                on:input:target=move |ev| {
+                    value.set(ev.target().value().parse::<i32>().unwrap_or_default())
+                }
             />
-            <span>{move || value().to_string()}</span>
-            <button on:click=move |_| set_value.update(move |value| *value += 1)>"+1"</button>
-            <button on:click=move |_| set_counters.update(move |counters| counters.retain(|(counter_id, _)| counter_id != &id))>"x"</button>
+
+            <span>{value}</span>
+            <button on:click=move |_| value.update(move |value| *value += 1)>"+1"</button>
+            <button on:click=move |_| {
+                set_counters
+                    .update(move |counters| counters.retain(|(counter_id, _)| counter_id != &id))
+            }>"x"</button>
         </li>
     }
 }

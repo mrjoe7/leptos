@@ -1,16 +1,10 @@
-[book]
-authors = ["Greg Johnston"]
-language = "en"
-multilingual = false
-src = "src"
-title = "The Leptos Guide"
+[output.html]
+additional-css = ["./mdbook-admonish.css"]
+[output.html.playground]
+runnable = false
 
 [preprocessor]
 
-[preprocessor.mermaid]
-command = "mdbook-mermaid"
-
-[output]
-
-[output.html]
-additional-js = ["mermaid.min.js", "mermaid-init.js"]
+[preprocessor.admonish]
+command = "mdbook-admonish"
+assets_version = "3.0.1" # do not edit: managed by `mdbook-admonish install`

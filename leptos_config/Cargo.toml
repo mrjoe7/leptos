@@ -1,11 +1,31 @@
 [package]
 name = "leptos_config"
-version = "0.0.20"
-edition = "2021"
 authors = ["Greg Johnston"]
 license = "MIT"
-repository = "https://github.com/gbj/leptos"
-description = "Configuraiton for the Leptos web framework."
+repository = "https://github.com/leptos-rs/leptos"
+description = "Configuration for the Leptos web framework."
+readme = "../README.md"
+version = { workspace = true }
+rust-version.workspace = true
+edition.workspace = true
 
 [dependencies]
-typed-builder = "0.11.0"
+config = { version = "0.14.1", default-features = false, features = [
+  "toml",
+  "convert-case",
+] }
+regex = "1.11"
+serde = { version = "1.0", features = ["derive", "rc"] }
+thiserror = "2.0"
+typed-builder = "0.20.0"
+
+[dev-dependencies]
+tokio = { version = "1.41", features = ["rt", "macros"] }
+tempfile = "3.14"
+temp-env = { version = "0.3.6", features = ["async_closure"] }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--generate-link-to-definition"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(leptos_debuginfo)'] }

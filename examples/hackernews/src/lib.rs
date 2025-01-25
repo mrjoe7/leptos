@@ -1,49 +1,43 @@
-use cfg_if::cfg_if;
-use leptos::*;
-use leptos_meta::*;
-use leptos_router::*;
+use leptos::prelude::*;
 mod api;
 mod routes;
-use routes::nav::*;
-use routes::stories::*;
-use routes::story::*;
-use routes::users::*;
+use leptos_meta::{provide_meta_context, Link, Meta, Stylesheet};
+use leptos_router::{
+    components::{FlatRoutes, Route, Router, RoutingProgress},
+    OptionalParamSegment, ParamSegment, StaticSegment,
+};
+use routes::{nav::*, stories::*, story::*, users::*};
+use std::time::Duration;
 
 #[component]
-pub fn App(cx: Scope) -> Element {
-    provide_context(cx, MetaContext::default());
+pub fn App() -> impl IntoView {
+    provide_meta_context();
+    let (is_routing, set_is_routing) = signal(false);
 
     view! {
-        cx,
-        <div>
-            <Stylesheet href="/style.css"/>
-            <Meta name="description" content="Leptos implementation of a HackerNews demo."/>
-            <Router>
-                <Nav />
-                <main>
-                    <Routes>
-                        <Route path="users/:id" element=|cx| view! { cx,  <User/> }/>
-                        <Route path="stories/:id" element=|cx| view! { cx,  <Story/> }/>
-                        <Route path="*stories" element=|cx| view! { cx,  <Stories/> }/>
-                    </Routes>
-                </main>
-            </Router>
-        </div>
+        <Stylesheet id="leptos" href="/pkg/hackernews.css"/>
+        <Link rel="shortcut icon" type_="image/ico" href="/favicon.ico"/>
+        <Meta name="description" content="Leptos implementation of a HackerNews demo."/>
+        <Router set_is_routing>
+            // shows a progress bar while async data are loading
+            <div class="routing-progress">
+                <RoutingProgress is_routing max_time=Duration::from_millis(250)/>
+            </div>
+            <Nav />
+            <main>
+                <FlatRoutes fallback=|| "Not found.">
+                    <Route path=(StaticSegment("users"), ParamSegment("id")) view=User/>
+                    <Route path=(StaticSegment("stories"), ParamSegment("id")) view=Story/>
+                    <Route path=OptionalParamSegment("stories") view=Stories/>
+                </FlatRoutes>
+            </main>
+        </Router>
     }
 }
 
-// Needs to be in lib.rs AFAIK because wasm-bindgen needs us to be compiling a lib. I may be wrong.
-cfg_if! {
-    if #[cfg(feature = "hydrate")] {
-        use wasm_bindgen::prelude::wasm_bindgen;
-
-        #[wasm_bindgen]
-        pub fn hydrate() {
-            _ = console_log::init_with_level(log::Level::Debug);
-            console_error_panic_hook::set_once();
-            leptos::hydrate(body().unwrap(), move |cx| {
-                view! { cx, <App/> }
-            });
-        }
-    }
+#[cfg(feature = "hydrate")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn hydrate() {
+    console_error_panic_hook::set_once();
+    leptos::mount::hydrate_body(App);
 }

@@ -1,14 +1,10 @@
 //! # Leptos Router
 //!
 //! Leptos Router is a router and state management tool for web applications
-//! written in Rust using the [Leptos](https://github.com/gbj/leptos) web framework.
-//! It is ”isomorphic,” i.e., it can be used for client-side applications/single-page
+//! written in Rust using the Leptos web framework.
+//! It is ”isomorphic”, i.e., it can be used for client-side applications/single-page
 //! apps (SPAs), server-side rendering/multi-page apps (MPAs), or to synchronize
 //! state between the two.
-//!
-//! **Note:** This is a work in progress. The feature to pass client-side route [State] in
-//! [History.state](https://developer.mozilla.org/en-US/docs/Web/API/History/state), in particular,
-//! is incomplete.
 //!
 //! ## Philosophy
 //!
@@ -21,66 +17,48 @@
 //!    and are rendered by different components. This means you can navigate between siblings
 //!    in this tree without re-rendering or triggering any change in the parent routes.
 //!
-//! 3. **Route-based data loading.** Each route should know exactly which data it needs
-//!    to render itself when the route is defined. This allows each route’s data to be
-//!    reloaded independently, and allows data from nested routes to be loaded in parallel,
-//!    avoiding waterfalls.
-//!
-//! 4. **Progressive enhancement.** The [A] and [Form] components resolve any relative
+//! 3. **Progressive enhancement.** The [`A`](crate::components::A) and
+//!    [`Form`](crate::components::Form) components resolve any relative
 //!    nested routes, render actual `<a>` and `<form>` elements, and (when possible)
 //!    upgrading them to handle those navigations with client-side routing. If you’re using
 //!    them with server-side rendering (with or without hydration), they just work,
 //!    whether JS/WASM have loaded or not.
 //!
-//!    Note as well that client-side routing works with ordinary `<a>` tags, as well,
-//!    so you do not even need to use the `<A/>` component in most cases.
-//!
 //! ## Example
 //!
 //! ```rust
+//! use leptos::prelude::*;
+//! use leptos_router::components::*;
+//! use leptos_router::path;
+//! use leptos_router::hooks::use_params_map;
 //!
-//! use leptos::*;
-//! use leptos_router::*;
-//!
-//! pub fn router_example(cx: Scope) -> Element {
+//! #[component]
+//! pub fn RouterExample() -> impl IntoView {
 //!   view! {
-//!     cx,
+//!
 //!     <div id="root">
 //!       // we wrap the whole app in a <Router/> to allow client-side navigation
 //!       // from our nav links below
 //!       <Router>
-//!         // <nav> and <main> will show on every route
-//!         <nav>
-//!           // LR will enhance the active <a> link with the [aria-current] attribute
-//!           // we can use this for styling them with CSS like `[aria-current] { font-weight: bold; }`
-//!           <A href="contacts">"Contacts"</A>
-//!           <A href="about">"About"</A>
-//!           <A href="settings">"Settings"</A>
-//!         </nav>
 //!         <main>
 //!           // <Routes/> both defines our routes and shows them on the page
-//!           <Routes>
+//!           <Routes fallback=|| "Not found.">
 //!             // our root route: the contact list is always shown
-//!             <Route
-//!               path=""
-//!               element=move |cx| view! { cx,  <ContactList/> }
+//!             <ParentRoute
+//!               path=path!("")
+//!               view=ContactList
 //!             >
 //!               // users like /gbj or /bob
 //!               <Route
-//!                 path=":id"
-//!                 element=move |cx| view! { cx,  <Contact/> }
+//!                 path=path!(":id")
+//!                 view=Contact
 //!               />
 //!               // a fallback if the /:id segment is missing from the URL
 //!               <Route
-//!                 path=""
-//!                 element=move |_| view! { cx,  <p class="contact">"Select a contact."</p> }
+//!                 path=path!("")
+//!                 view=move || view! { <p class="contact">"Select a contact."</p> }
 //!               />
-//!             </Route>
-//!             // LR will automatically use this for /about, not the /:id match above
-//!             <Route
-//!               path="about"
-//!               element=move |cx| view! { cx,  <About/> }
-//!             />
+//!             </ParentRoute>
 //!           </Routes>
 //!         </main>
 //!       </Router>
@@ -103,15 +81,15 @@
 //! }
 //!
 //! #[component]
-//! fn ContactList(cx: Scope) -> Element {
+//! fn ContactList() -> impl IntoView {
 //!   // loads the contact list data once; doesn't reload when nested routes change
-//!   let contacts = create_resource(cx, || (), |_| contact_list_data());
+//!   let contacts = Resource::new(|| (), |_| contact_list_data());
 //!   view! {
-//!     cx,
+//!
 //!     <div>
 //!       // show the contacts
 //!       <ul>
-//!         {move || contacts.read().map(|contacts| view! { cx, <li>"todo contact info"</li> } )}
+//!         {move || contacts.get().map(|contacts| view! { <li>"todo contact info"</li> } )}
 //!       </ul>
 //!
 //!       // insert the nested child route here
@@ -121,33 +99,125 @@
 //! }
 //!
 //! #[component]
-//! fn Contact(cx: Scope) -> Element {
-//!   let params = use_params_map(cx);
-//!   let data = create_resource(
-//!     cx,
-//!     move || params.with(|p| p.get("id").cloned().unwrap_or_default()),
+//! fn Contact() -> impl IntoView {
+//!   let params = use_params_map();
+//!   let data = Resource::new(
+//!     move || params.read().get("id").unwrap_or_default(),
 //!     move |id| contact_data(id)
 //!   );
 //!   todo!()
 //! }
-//!
-//! #[component]
-//! fn About(cx: Scope) -> Element {
-//!   todo!()
-//! }
-//!
 //! ```
+//!
+//! You can find examples of additional APIs in the [`router`] example.
+//!
+//! # Feature Flags
+//! - `ssr` Server-side rendering: Generate an HTML string (typically on the server)
+//! - `nightly`: On `nightly` Rust, enables the function-call syntax for signal getters and setters.
+//! - `tracing`: Enables support for the `tracing` crate.
+//!
+//! [`Leptos`]: <https://github.com/leptos-rs/leptos>
+//! [`router`]: <https://github.com/leptos-rs/leptos/blob/main/examples/router/src/lib.rs>
 
-#![cfg_attr(not(feature = "stable"), feature(auto_traits))]
-#![cfg_attr(not(feature = "stable"), feature(negative_impls))]
-#![cfg_attr(not(feature = "stable"), feature(type_name_of_val))]
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
+#![cfg_attr(feature = "nightly", feature(auto_traits))]
+#![cfg_attr(feature = "nightly", feature(negative_impls))]
 
-mod components;
-mod history;
-mod hooks;
+/// Components for route definition and for enhanced links and forms.
+pub mod components;
+/// An optimized "flat" router without nested routes.
+pub mod flat_router;
+mod form;
+mod generate_route_list;
+/// Hooks that can be used to access router state inside your components.
+pub mod hooks;
+mod link;
+/// Utilities for accessing the current location.
+pub mod location;
 mod matching;
+mod method;
+mod navigate;
+/// A nested router that supports multiple levels of route definitions.
+pub mod nested_router;
+/// Support for maps of parameters in the path or in the query.
+pub mod params;
+mod ssr_mode;
+/// Support for static routing.
+pub mod static_routes;
 
-pub use components::*;
-pub use history::*;
-pub use hooks::*;
-pub use matching::Branch;
+pub use generate_route_list::*;
+#[doc(inline)]
+pub use leptos_router_macro::path;
+pub use matching::*;
+pub use method::*;
+pub use navigate::*;
+pub use ssr_mode::*;
+
+pub(crate) mod view_transition {
+    use js_sys::{Function, Promise, Reflect};
+    use leptos::leptos_dom::helpers::document;
+    use wasm_bindgen::{closure::Closure, intern, JsCast, JsValue};
+
+    pub fn start_view_transition(
+        level: u8,
+        is_back_navigation: bool,
+        fun: impl FnOnce() + 'static,
+    ) {
+        let document = document();
+        let document_element = document.document_element().unwrap();
+        let class_list = document_element.class_list();
+        let svt = Reflect::get(
+            &document,
+            &JsValue::from_str(intern("startViewTransition")),
+        )
+        .and_then(|svt| svt.dyn_into::<Function>());
+        _ = class_list.add_1(&format!("router-outlet-{level}"));
+        if is_back_navigation {
+            _ = class_list.add_1("router-back");
+        }
+        match svt {
+            Ok(svt) => {
+                let cb = Closure::once_into_js(Box::new(move || {
+                    fun();
+                }));
+                match svt.call1(
+                    document.unchecked_ref(),
+                    cb.as_ref().unchecked_ref(),
+                ) {
+                    Ok(view_transition) => {
+                        let class_list = document_element.class_list();
+                        let finished = Reflect::get(
+                            &view_transition,
+                            &JsValue::from_str("finished"),
+                        )
+                        .expect("no `finished` property on ViewTransition")
+                        .unchecked_into::<Promise>();
+                        let cb = Closure::new(Box::new(move |_| {
+                            if is_back_navigation {
+                                class_list.remove_1("router-back").unwrap();
+                            }
+                            class_list
+                                .remove_1(&format!("router-outlet-{level}"))
+                                .unwrap();
+                        })
+                            as Box<dyn FnMut(JsValue)>);
+                        _ = finished.then(&cb);
+                        cb.into_js_value();
+                    }
+                    Err(e) => {
+                        web_sys::console::log_1(&e);
+                    }
+                }
+            }
+            Err(_) => {
+                leptos::logging::warn!(
+                    "NOTE: View transitions are not supported in this \
+                     browser; unless you provide a polyfill, view transitions \
+                     will not be applied."
+                );
+                fun();
+            }
+        }
+    }
+}
